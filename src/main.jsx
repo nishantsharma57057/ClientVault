@@ -1,7 +1,7 @@
 import React,{useState,useEffect} from 'react';
 import{createRoot}from'react-dom/client';
 import{onAuthStateChanged,signInWithEmailAndPassword,signOut}from'firebase/auth';
-import{collection,query,where,onSnapshot,addDoc,deleteDoc,doc,serverTimestamp}from'firebase/firestore';
+import{collection,query as firestoreQuery,where,onSnapshot,addDoc,deleteDoc,doc,serverTimestamp}from'firebase/firestore';
 import{LayoutDashboard,Users,FolderKanban,ListTodo,Wallet,CalendarClock,ShieldAlert,Moon,Sun,Plus,Trash2,Search,Download,LogOut,LockKeyhole}from'lucide-react';
 import{auth,db,configured,ADMIN_UID}from'./firebase.js';
 import './style.css';
@@ -17,7 +17,7 @@ if(!configured)return <div className="auth-page"><div className="auth-card"><h1>
 if(loading)return <div className="auth-page"><div className="auth-card"><p>Checking your session...</p></div></div>;
 return user?<Workspace user={user}/>:<Login/>}
 function Workspace({user}){const[page,T]=useState('Dashboard'),[dark,D]=useState(false),[records,R]=useState(Object.fromEntries(tables.map(t=>[t,[]]))),[query,Q]=useState(''),[adding,A]=useState(false),[form,F]=useState({}),[error,X]=useState(''),[busy,B]=useState(false);
-useEffect(()=>{const unsub=tables.map(t=>onSnapshot(query(collection(db,t),where('ownerId','==',user.uid)),snap=>R(old=>({...old,[t]:snap.docs.map(d=>({id:d.id,...d.data()}))})),err=>X('Cannot read '+t+': '+err.message)));return()=>unsub.forEach(fn=>fn())},[user.uid]);
+useEffect(()=>{const unsub=tables.map(t=>onSnapshot(firestoreQuery(collection(db,t),where('ownerId','==',user.uid)),snap=>R(old=>({...old,[t]:snap.docs.map(d=>({id:d.id,...d.data()}))})),err=>X('Cannot read '+t+': '+err.message)));return()=>unsub.forEach(fn=>fn())},[user.uid]);
 async function add(){let table=page.toLowerCase();B(true);X('');try{const data={ownerId:user.uid,createdAt:serverTimestamp()};for(const f of fields[table])if(form[f]!==undefined&&form[f]!=='')data[f]=f==='amount'||f==='received'?Number(form[f]):String(form[f]);if(table==='payments'&&(Number(data.received||0)>Number(data.amount||0)||Number(data.amount||0)<0))throw Error('Payment values are invalid');if(!Object.keys(data).some(k=>!['ownerId','createdAt'].includes(k)))throw Error('Enter at least one field');await addDoc(collection(db,table),data);A(false);F({})}catch(e){X(e.message)}finally{B(false)}}
 async function remove(id){if(!confirm('Delete this record permanently?'))return;try{await deleteDoc(doc(db,page.toLowerCase(),id))}catch(e){X(e.message)}}
 function exportRecords(){const blob=new Blob([JSON.stringify(records,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='clientvault-export.json';a.click();URL.revokeObjectURL(url)}
