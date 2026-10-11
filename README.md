@@ -1,32 +1,35 @@
-# ClientVault — Production migration status
+# ClientVault — Firebase-based Client Manager (Setup Required)
 
-**Phase 1 code, not approved for credential storage.** Live client records are moved from localStorage to Supabase tables secured by owner-scoped RLS and MFA assurance-level checks. The original demo localStorage records are not automatically migrated. The integrated password vault, KMS, confidential file storage, scheduled reminders, and encrypted offsite backup are **not implemented**.
+ClientVault is a React/Vite client management workspace with Firebase email/password authentication and Cloud Firestore records.
 
-## Setup required
+> **NOT approved for sensitive client data.** This version intentionally does not implement the encrypted credential vault, enforced MFA, private file uploads, scheduled reminders, audited backups or an independent security review. Never store credentials, API tokens or client secrets in fields or notes.
 
-1. Create a Supabase project. Disable signups in Authentication settings. Create **one** admin account in Authentication → Users.
-2. Enroll and verify a TOTP MFA factor for that user (Authentication MFA setup; the app includes a TOTP enrollment flow).
-3. Run `supabase/migrations/001_core.sql` in SQL editor. Replace the placeholder in the final commented admin insert statement with the user's UUID and run that SQL statement. Do not commit UUID or credentials unnecessarily.
-4. Set Vercel environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_ADMIN_USER_ID`. The publishable key is not secret; never use service-role keys in VITE_ variables.
-5. Redeploy the app. Login with the single admin account; set up MFA and complete the challenge before accessing records.
-6. Test permissions using a second **test** authenticated account: all reads/writes must return empty/denied, including forged owner IDs. Test token refresh, logouts, MFA and DB backups.
-7. Back up all existing demo browser data manually before switching, if needed. No automatic import is provided.
+## Why no Vercel environment variables?
+Firebase **Web App config is public project identification**, unlike a Firebase Admin SDK service-account key. It can be committed safely when Firestore security rules and authentication are configured correctly. Never commit private service-account credentials. Firebase may require billing for some features; review Firestore and Authentication plan limits.
 
-### Security boundaries
-- Browser uses Supabase Auth and anon/publishable key; RLS controls database writes/reads. The application additionally verifies the configured admin UUID for UX, but the DB's `private.app_admin` and `aal2` validation is authoritative.
-- Access to saved data requires TOTP MFA (aal2); authentication without MFA cannot read/write rows.
-- The vault is intentionally **not available** before an externally managed KMS, backend integration, audit logging, backups, and independent security review.
-- Current schema stores simple project client labels, not relational foreign keys; this is an initial migration and should be normalized before a larger production rollout.
-- Stored notes are not end-to-end encrypted. Do not store passwords, API tokens or sensitive client data.
-- Supabase-managed Postgres backups and file backups must be configured and tested separately.
-- Source is public. Never commit any environment secrets or private keys.
+## Setup (one-time)
+1. Firebase Console -> Add project -> build a **Web App** (</> icon). Copy the Web SDK config values: apiKey, authDomain, projectId and appId.
+2. Authentication -> Sign-in method -> enable **Email/Password**. Do not enable anonymous login or any public-facing signup UI. **Firebase Email/Password itself generally permits self-signup through the public API when enabled; the app relies on strict UID-locked Firestore rules to prevent new accounts reading client data.** If you require blocked account creation, implement privileged Auth blocking functions via Firebase Authentication with Identity Platform or another backend authorization mechanism.
+3. Authentication -> Users -> Add user to create an administrator. Copy that user's **Firebase UID**. The old Supabase UID is not valid here.
+4. In `src/firebase-config.js`, replace all placeholder values, including `ADMIN_UID`. Only put *Firebase Web SDK public config* and the non-secret UID into this file.
+5. Edit `firestore.rules` to replace `REPLACE_FIREBASE_AUTH_ADMIN_UID` with the exact same UID, then **publish** the rules in Firebase Console -> Firestore Database -> Rules. You can also deploy them with Firebase CLI after configuring `.firebaserc`. **Do not proceed unless rules are published and tested.**
+6. Firestore Database -> Create database (production mode) -> select a region. Firebase may require billing setup depending on current policy and selected region.
+7. In Firebase Console -> Authentication -> Settings -> Authorized domains, add the deployed Vercel domain. Review phishing/email enumeration protection, session settings, account recovery and MFA requirements.
+8. GitHub commit triggers Vercel build. No Vercel env vars are needed for this version because Firebase Web SDK config is provided in the repo.
+9. Open deployed Vercel URL, sign in, add a **dummy** client, refresh, confirm persistence, delete it and verify deletion.
+
+### Required security testing
+- With Firebase emulator, verify: unauthenticated requests denied; a different UID denied for every collection; admin can create/query/delete own records; spoofed ownerId rejected; disallowed fields rejected; updates denied; other collections denied.
+- Never use a public client configuration as proof of data authorization; only deployed Firestore rules enforce it.
+- Before real customer records: implement backups/restore tests, MFA enforcement, rules regression tests, audit trails and data validation. Disable any unneeded Firebase Auth providers.
+- No migration from Supabase data is performed by this change. Any existing Supabase project and Vercel integrations must be disconnected/deleted by the project owner only after verifying no needed data remains.
 
 ## Development
-```sh
-cp .env.example .env.local
+```bash
 npm install
 npm run dev
 npm run build
 ```
 
-Vercel build command: `npm run build`; output: `dist`.
+## Vercel
+Framework Vite, build `npm run build`, output `dist`.
