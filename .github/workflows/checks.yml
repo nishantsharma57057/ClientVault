@@ -1,0 +1,27 @@
+name: ClientVault checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build frontend
+        run: npm run build
+      - name: Check committed files for sensitive material
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env(\..*)?|.*\.(pem|key|p12|pfx))$' | grep -v '\.env.example$'; then
+            echo "Potential secret-bearing file tracked"; exit 1
+          fi
